@@ -685,15 +685,17 @@ public abstract class AbstractUVCCameraHandler extends Handler {
                 if(! Objects.requireNonNull(file.getParentFile()).exists()) {
                     file.getParentFile().mkdirs();
                 }
+                // 始终将音频设置为关闭状态
+                params.setVoiceClose(true);
                 mMuxer = new Mp4MediaMuxer(params.getRecordPath(),
-                        params.getRecordDuration() * 60 * 1000, params.isVoiceClose());
+                        params.getRecordDuration() * 60 * 1000, true); // 强制设置为关闭音频
             }
             // 启动视频编码线程
             startVideoRecord();
-            // 启动音频编码线程
-            if (params != null && !params.isVoiceClose()) {
-                startAudioRecord();
-            }
+            // 音频录制功能已禁用
+            // if (params != null && !params.isVoiceClose()) {
+            //     startAudioRecord();
+            // }
             callOnStartRecording();
         }
 

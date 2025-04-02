@@ -33,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SplashActivity extends AppCompatActivity {
     private static final String[] REQUIRED_PERMISSION_LIST = new String[]{
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.RECORD_AUDIO,
     };
     private static final int REQUEST_CODE = 1;
     private List<String> mMissPermissions = new ArrayList<>();

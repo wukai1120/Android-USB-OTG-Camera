@@ -1,44 +1,59 @@
 package com.jiangdg.usbcamera.view;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDevice;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 
 import android.text.TextUtils;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.Surface;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.ListView;
-import android.widget.SeekBar;
-import android.widget.Switch;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 import com.jiangdg.usbcamera.R;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.jiangdg.usbcamera.UVCCameraHelper;
 import com.jiangdg.usbcamera.application.MyApplication;
 import com.jiangdg.usbcamera.utils.FileUtils;
 import com.serenegiant.usb.CameraDialog;
-import com.serenegiant.usb.Size;
 import com.serenegiant.usb.USBMonitor;
 import com.serenegiant.usb.common.AbstractUVCCameraHandler;
 import com.serenegiant.usb.encoder.RecordParams;
 import com.serenegiant.usb.widget.CameraViewInterface;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
+
+import android.content.Intent;
+import android.net.Uri;
+import androidx.core.content.FileProvider;
+import android.app.AlertDialog;
+import android.widget.ListView;
+import android.widget.TextView;
+import java.io.FilenameFilter;
+import com.jiangdg.usbcamera.adapter.FileListAdapter;
 
 /**
  * UVCCamera use demo
@@ -48,23 +63,27 @@ import butterknife.ButterKnife;
 
 public class USBCameraActivity extends AppCompatActivity implements CameraDialog.CameraDialogParent, CameraViewInterface.Callback {
     private static final String TAG = "Debug";
+    private static final int REQUEST_CODE = 1;
+    private static final String[] REQUIRED_PERMISSION_LIST = new String[]{
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+    };
+    
     @BindView(R.id.camera_view)
     public View mTextureView;
     @BindView(R.id.toolbar)
     public Toolbar mToolbar;
-    @BindView(R.id.seekbar_brightness)
-    public SeekBar mSeekBrightness;
-    @BindView(R.id.seekbar_contrast)
-    public SeekBar mSeekContrast;
-    @BindView(R.id.switch_rec_voice)
-    public Switch mSwitchVoice;
+    @BindView(R.id.et_file_name)
+    public EditText mEtFileName;
+    @BindView(R.id.btn_record)
+    public Button mBtnRecord;
 
     private UVCCameraHelper mCameraHelper;
     private CameraViewInterface mUVCCameraView;
-    private AlertDialog mDialog;
 
     private boolean isRequest;
     private boolean isPreview;
+    private boolean isRecording = false;
+    private List<String> mMissPermissions = new ArrayList<>();
 
     private UVCCameraHelper.OnMyDevConnectListener listener = new UVCCameraHelper.OnMyDevConnectListener() {
 
@@ -97,7 +116,6 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
             } else {
                 isPreview = true;
                 showShortMsg("connecting");
-                // initialize seekbar
                 // need to wait UVCCamera initialize over
                 new Thread(new Runnable() {
                     @Override
@@ -109,8 +127,17 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                         }
                         Looper.prepare();
                         if(mCameraHelper != null && mCameraHelper.isCameraOpened()) {
-                            mSeekBrightness.setProgress(mCameraHelper.getModelValue(UVCCameraHelper.MODE_BRIGHTNESS));
-                            mSeekContrast.setProgress(mCameraHelper.getModelValue(UVCCameraHelper.MODE_CONTRAST));
+                            // 使用默认亮度和对比度值
+                            mCameraHelper.resetModelValue(UVCCameraHelper.MODE_BRIGHTNESS);
+                            mCameraHelper.resetModelValue(UVCCameraHelper.MODE_CONTRAST);
+                            
+                            // 相机已经打开，更新UI
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    updateRecordButtonState();
+                                }
+                            });
                         }
                         Looper.loop();
                     }
@@ -121,6 +148,15 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         @Override
         public void onDisConnectDev(UsbDevice device) {
             showShortMsg("disconnecting");
+            // 相机断开，禁用录制按钮
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mBtnRecord.setEnabled(false);
+                    mBtnRecord.setAlpha(0.5f);
+                    showShortMsg("相机已断开，无法录制");
+                }
+            });
         }
     };
 
@@ -129,62 +165,167 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_usbcamera);
         ButterKnife.bind(this);
-        initView();
+        
+        // 在应用启动时检查并创建视频保存目录
+        createVideoSaveDirectory();
+        
+        // 检查权限
+        if (isVersionM()) {
+            checkAndRequestPermissions();
+        } else {
+            initView();
+            initCamera();
+        }
+    }
+    
+    private boolean isVersionM() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M;
+    }
 
-        // step.1 initialize UVCCameraHelper
+    private void checkAndRequestPermissions() {
+        mMissPermissions.clear();
+        for (String permission : REQUIRED_PERMISSION_LIST) {
+            int result = ContextCompat.checkSelfPermission(this, permission);
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                mMissPermissions.add(permission);
+            }
+        }
+        // 检查是否已经授予权限
+        if (mMissPermissions.isEmpty()) {
+            initView();
+            initCamera();
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    mMissPermissions.toArray(new String[mMissPermissions.size()]),
+                    REQUEST_CODE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(final int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE) {
+            for (int i = grantResults.length - 1; i >= 0; i--) {
+                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    mMissPermissions.remove(permissions[i]);
+                }
+            }
+        }
+        // 判断是否获得了权限
+        if (mMissPermissions.isEmpty()) {
+            initCamera();
+        } else {
+            Toast.makeText(USBCameraActivity.this, "获取权限失败，退出应用", Toast.LENGTH_SHORT).show();
+            USBCameraActivity.this.finish();
+        }
+    }
+    
+    private void initCamera() {
+        // 初始化UVCCameraHelper
         mUVCCameraView = (CameraViewInterface) mTextureView;
         mUVCCameraView.setCallback(this);
         mCameraHelper = UVCCameraHelper.getInstance();
         mCameraHelper.setDefaultFrameFormat(UVCCameraHelper.FRAME_FORMAT_MJPEG);
         mCameraHelper.initUSBMonitor(this, mUVCCameraView, listener);
-
-        mCameraHelper.setOnPreviewFrameListener(new AbstractUVCCameraHandler.OnPreViewResultListener() {
-            @Override
-            public void onPreviewResult(byte[] nv21Yuv) {
-                Log.d(TAG, "onPreviewResult: "+nv21Yuv.length);
-            }
-        });
     }
 
     private void initView() {
         setSupportActionBar(mToolbar);
-
-        mSeekBrightness.setMax(100);
-        mSeekBrightness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        
+        // 初始设置录制按钮为禁用状态并添加提示
+        mBtnRecord.setEnabled(false);
+        mBtnRecord.setAlpha(0.5f);
+        showShortMsg("请先输入文件名才能开始录制");
+        
+        // 添加文本变化监听器
+        mEtFileName.addTextChangedListener(new TextWatcher() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if(mCameraHelper != null && mCameraHelper.isCameraOpened()) {
-                    mCameraHelper.setModelValue(UVCCameraHelper.MODE_BRIGHTNESS,progress);
-                }
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                // 不需要实现
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // 当文本变化时，更新按钮状态
+                updateRecordButtonState();
             }
 
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
+            public void afterTextChanged(Editable s) {
+                // 不需要实现
             }
         });
-        mSeekContrast.setMax(100);
-        mSeekContrast.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        
+        // 初始化录制按钮
+        mBtnRecord.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if(mCameraHelper != null && mCameraHelper.isCameraOpened()) {
-                    mCameraHelper.setModelValue(UVCCameraHelper.MODE_CONTRAST,progress);
+            public void onClick(View v) {
+                if (mCameraHelper == null || !mCameraHelper.isCameraOpened()) {
+                    showShortMsg("抱歉，相机未打开");
+                    return;
                 }
-            }
+                
+                if (!isRecording) {
+                    String fileName = mEtFileName.getText().toString().trim();
+                    if (TextUtils.isEmpty(fileName)) {
+                        showShortMsg("请输入文件名");
+                        return;
+                    }
+                    
+                    // 获取视频保存目录
+                    File usbCameraDir = getVideoSaveDirectory();
+                    // 双重检查目录是否存在
+                    if (!usbCameraDir.exists()) {
+                        boolean created = usbCameraDir.mkdirs();
+                        if (!created) {
+                            showShortMsg("无法创建视频保存目录，请检查存储权限");
+                            return;
+                        }
+                    }
+                    
+                    String videoPath = usbCameraDir.getAbsolutePath() + "/" + fileName + UVCCameraHelper.SUFFIX_MP4;
+                    
+                    // 要先创建文件以供录制
+                    FileUtils.createfile(videoPath);
+                    
+                    // 开始录制
+                    RecordParams params = new RecordParams();
+                    params.setRecordPath(videoPath);
+                    params.setRecordDuration(0);
+                    params.setVoiceClose(true);
+                    params.setSupportOverlay(true);
+                    
+                    mCameraHelper.startPusher(params, new AbstractUVCCameraHandler.OnEncodeResultListener() {
+                        @Override
+                        public void onEncodeResult(byte[] data, int offset, int length, long timestamp, int type) {
+                            // type = 1, h264 video stream
+                            if (type == 1) {
+                                FileUtils.putFileStream(data, offset, length);
+                            }
+                        }
 
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
+                        @Override
+                        public void onRecordResult(String videoPath) {
+                            if(TextUtils.isEmpty(videoPath)) {
+                                return;
+                            }
+                            new Handler(getMainLooper()).post(() -> 
+                                Toast.makeText(USBCameraActivity.this, "视频保存路径: " + videoPath, Toast.LENGTH_SHORT).show());
+                        }
+                    });
+                    
+                    isRecording = true;
+                    mBtnRecord.setText("结束录制");
+                    showShortMsg("开始录制...");
+                } else {
+                    // 停止录制
+                    FileUtils.releaseFile();
+                    mCameraHelper.stopPusher();
+                    
+                    isRecording = false;
+                    mBtnRecord.setText("开始录制");
+                    showShortMsg("录制结束");
+                }
             }
         });
     }
@@ -215,140 +356,12 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_takepic:
-                if (mCameraHelper == null || !mCameraHelper.isCameraOpened()) {
-                    showShortMsg("sorry,camera open failed");
-                    return super.onOptionsItemSelected(item);
-                }
-                String picPath = FileUtils.ROOT_PATH + "/" + MyApplication.DIRECTORY_NAME +"/images/"
-                        + System.currentTimeMillis() + UVCCameraHelper.SUFFIX_JPEG;
-
-                mCameraHelper.capturePicture(picPath, new AbstractUVCCameraHandler.OnCaptureListener() {
-                    @Override
-                    public void onCaptureResult(String path) {
-                        if(TextUtils.isEmpty(path)) {
-                            return;
-                        }
-                        new Handler(getMainLooper()).post(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(USBCameraActivity.this, "save path:"+path, Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
-                });
-
-                break;
-            case R.id.menu_recording:
-                if (mCameraHelper == null || !mCameraHelper.isCameraOpened()) {
-                    showShortMsg("sorry,camera open failed");
-                    return super.onOptionsItemSelected(item);
-                }
-                if (!mCameraHelper.isPushing()) {
-                    String videoPath = FileUtils.ROOT_PATH + "/" + MyApplication.DIRECTORY_NAME +"/videos/" + System.currentTimeMillis()
-                            + UVCCameraHelper.SUFFIX_MP4;
-
-//                    FileUtils.createfile(FileUtils.ROOT_PATH + "test666.h264");
-                    // if you want to record,please create RecordParams like this
-                    RecordParams params = new RecordParams();
-                    params.setRecordPath(videoPath);
-                    params.setRecordDuration(0);                        // auto divide saved,default 0 means not divided
-                    params.setVoiceClose(mSwitchVoice.isChecked());    // is close voice
-
-                    params.setSupportOverlay(true); // overlay only support armeabi-v7a & arm64-v8a
-                    mCameraHelper.startPusher(params, new AbstractUVCCameraHandler.OnEncodeResultListener() {
-                        @Override
-                        public void onEncodeResult(byte[] data, int offset, int length, long timestamp, int type) {
-                            // type = 1,h264 video stream
-                            if (type == 1) {
-                                FileUtils.putFileStream(data, offset, length);
-                            }
-                            // type = 0,aac audio stream
-                            if(type == 0) {
-
-                            }
-                        }
-
-                        @Override
-                        public void onRecordResult(String videoPath) {
-                            if(TextUtils.isEmpty(videoPath)) {
-                                return;
-                            }
-                            new Handler(getMainLooper()).post(() -> Toast.makeText(USBCameraActivity.this, "save videoPath:"+videoPath, Toast.LENGTH_SHORT).show());
-                        }
-                    });
-                    // if you only want to push stream,please call like this
-                    // mCameraHelper.startPusher(listener);
-                    showShortMsg("start record...");
-                    mSwitchVoice.setEnabled(false);
-                } else {
-                    FileUtils.releaseFile();
-                    mCameraHelper.stopPusher();
-                    showShortMsg("stop record...");
-                    mSwitchVoice.setEnabled(true);
-                }
-                break;
-            case R.id.menu_resolution:
-                if (mCameraHelper == null || !mCameraHelper.isCameraOpened()) {
-                    showShortMsg("sorry,camera open failed");
-                    return super.onOptionsItemSelected(item);
-                }
-                showResolutionListDialog();
-                break;
-            case R.id.menu_focus:
-                if (mCameraHelper == null || !mCameraHelper.isCameraOpened()) {
-                    showShortMsg("sorry,camera open failed");
-                    return super.onOptionsItemSelected(item);
-                }
-                mCameraHelper.startCameraFoucs();
-                break;
+        int id = item.getItemId();
+        if (id == R.id.action_open_folder) {
+            openVideoFolder();
+            return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    private void showResolutionListDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(USBCameraActivity.this);
-        View rootView = LayoutInflater.from(USBCameraActivity.this).inflate(R.layout.layout_dialog_list, null);
-        ListView listView = (ListView) rootView.findViewById(R.id.listview_dialog);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(USBCameraActivity.this, android.R.layout.simple_list_item_1, getResolutionList());
-        if (adapter != null) {
-            listView.setAdapter(adapter);
-        }
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> adapterView, View view, int position, long id) {
-                if (mCameraHelper == null || !mCameraHelper.isCameraOpened())
-                    return;
-                final String resolution = (String) adapterView.getItemAtPosition(position);
-                String[] tmp = resolution.split("x");
-                if (tmp != null && tmp.length >= 2) {
-                    int widht = Integer.valueOf(tmp[0]);
-                    int height = Integer.valueOf(tmp[1]);
-                    mCameraHelper.updateResolution(widht, height);
-                }
-                mDialog.dismiss();
-            }
-        });
-
-        builder.setView(rootView);
-        mDialog = builder.create();
-        mDialog.show();
-    }
-
-    // example: {640x480,320x240,etc}
-    private List<String> getResolutionList() {
-        List<Size> list = mCameraHelper.getSupportedPreviewSizes();
-        List<String> resolutions = null;
-        if (list != null && list.size() != 0) {
-            resolutions = new ArrayList<>();
-            for (Size size : list) {
-                if (size != null) {
-                    resolutions.add(size.width + "x" + size.height);
-                }
-            }
-        }
-        return resolutions;
     }
 
     @Override
@@ -399,6 +412,123 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         if (isPreview && mCameraHelper.isCameraOpened()) {
             mCameraHelper.stopPreview();
             isPreview = false;
+        }
+    }
+
+    /**
+     * 打开视频保存文件夹
+     */
+    private void openVideoFolder() {
+        File usbCameraDir = getVideoSaveDirectory();
+        if (!usbCameraDir.exists() || !usbCameraDir.isDirectory()) {
+            showShortMsg("文件夹不存在，将创建文件夹");
+            boolean created = usbCameraDir.mkdirs();
+            if (!created) {
+                showShortMsg("无法创建文件夹，请检查权限");
+                return;
+            }
+        }
+        
+        // 显示视频文件列表对话框
+        showVideoFilesDialog(usbCameraDir);
+    }
+    
+    /**
+     * 显示视频文件列表对话框
+     * @param directory 视频文件所在目录
+     */
+    private void showVideoFilesDialog(File directory) {
+        // 获取目录中的所有MP4文件
+        File[] files = directory.listFiles(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                return name.toLowerCase().endsWith(".mp4");
+            }
+        });
+        
+        // 创建对话框视图
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_file_list, null);
+        ListView listView = dialogView.findViewById(R.id.list_files);
+        TextView emptyView = dialogView.findViewById(R.id.tv_empty_files);
+        
+        // 创建对话框
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setView(dialogView);
+        
+        final AlertDialog dialog = builder.create();
+        
+        if (files != null && files.length > 0) {
+            // 将文件数组转为列表
+            List<File> fileList = new ArrayList<>(Arrays.asList(files));
+            
+            // 按照修改时间排序（最新的在前面）
+            Collections.sort(fileList, new Comparator<File>() {
+                @Override
+                public int compare(File f1, File f2) {
+                    return Long.compare(f2.lastModified(), f1.lastModified());
+                }
+            });
+            
+            // 创建适配器并设置给ListView
+            FileListAdapter adapter = new FileListAdapter(this, fileList);
+            listView.setAdapter(adapter);
+            listView.setVisibility(View.VISIBLE);
+            emptyView.setVisibility(View.GONE);
+        } else {
+            // 没有文件时显示空视图
+            listView.setVisibility(View.GONE);
+            emptyView.setVisibility(View.VISIBLE);
+        }
+        
+        // 显示对话框
+        dialog.show();
+    }
+
+    /**
+     * 创建视频保存目录
+     */
+    private void createVideoSaveDirectory() {
+        File usbCameraDir = new File(FileUtils.ROOT_PATH, "usbcamera");
+        if (!usbCameraDir.exists()) {
+            boolean created = usbCameraDir.mkdirs();
+            if (created) {
+                Log.d(TAG, "视频保存目录创建成功: " + usbCameraDir.getAbsolutePath());
+            } else {
+                Log.e(TAG, "视频保存目录创建失败: " + usbCameraDir.getAbsolutePath());
+                showShortMsg("无法创建视频保存目录，请检查存储权限");
+            }
+        } else {
+            Log.d(TAG, "视频保存目录已存在: " + usbCameraDir.getAbsolutePath());
+        }
+    }
+    
+    /**
+     * 获取视频保存目录路径
+     * @return 保存目录文件对象
+     */
+    private File getVideoSaveDirectory() {
+        return new File(FileUtils.ROOT_PATH, MyApplication.VIDEO_DIRECTORY_NAME);
+    }
+
+    /**
+     * 更新录制按钮状态
+     */
+    private void updateRecordButtonState() {
+        boolean hasText = !TextUtils.isEmpty(mEtFileName.getText().toString().trim());
+        boolean cameraReady = mCameraHelper != null && mCameraHelper.isCameraOpened();
+        
+        // 只有当相机已连接且有文件名时按钮才可用
+        boolean enabled = hasText && cameraReady;
+        
+        mBtnRecord.setEnabled(enabled);
+        mBtnRecord.setAlpha(enabled ? 1.0f : 0.5f);
+        
+        if (!cameraReady) {
+            showShortMsg("请先连接相机，并输入文件名");
+        } else if (!hasText) {
+            showShortMsg("请输入文件名后才能开始录制");
+        } else {
+            showShortMsg("现在可以开始录制了");
         }
     }
 }

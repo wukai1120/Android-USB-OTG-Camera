@@ -30,69 +30,50 @@
     </FrameLayout>
 
     <LinearLayout
-        android:id="@+id/llayout_contrast"
+        android:id="@+id/llayout_record_controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_marginBottom="10dp"
-        android:layout_marginLeft="10dp"
-        android:layout_marginRight="10dp"
-        android:orientation="horizontal">
+        android:layout_below="@id/toolbar"
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:background="#80000000">
 
         <TextView
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:paddingBottom="7dp"
-            android:paddingTop="7dp"
-            android:text="对比度(contrast)"
-            android:textColor="@color/colorWhite" />
+            android:text="请输入文件名后才能开始录制"
+            android:textColor="#FFFF00"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:layout_marginBottom="5dp"/>
 
-        <SeekBar
-            android:id="@+id/seekbar_contrast"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="2" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/llayout_brightness"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_above="@id/llayout_contrast"
-        android:layout_marginBottom="10dp"
-        android:layout_marginLeft="10dp"
-        android:layout_marginRight="10dp"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:paddingBottom="7dp"
-            android:paddingTop="7dp"
-            android:text="亮度(brightness)"
-            android:textColor="@color/colorWhite" />
+            android:orientation="horizontal">
 
-        <SeekBar
-            android:id="@+id/seekbar_brightness"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="2" />
+            <EditText
+                android:id="@+id/et_file_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="输入文件名"
+                android:textColorHint="#AAAAAA"
+                android:textColor="#000000"
+                android:background="@android:drawable/editbox_background"
+                android:padding="8dp"
+                android:singleLine="true"/>
+
+            <Button
+                android:id="@+id/btn_record"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="开始录制"
+                android:textColor="#FFFFFF"
+                android:background="@color/colorPrimary"
+                android:alpha="0.5"/>
+        </LinearLayout>
     </LinearLayout>
-
-    <Switch
-        android:id="@+id/switch_rec_voice"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignLeft="@+id/llayout_brightness"
-        android:layout_alignStart="@+id/llayout_brightness"
-        android:layout_below="@+id/toolbar"
-        android:layout_marginLeft="13dp"
-        android:layout_marginStart="13dp"
-        android:layout_marginTop="27dp"
-        android:checked="false"
-        android:text="closeVoice"
-        android:textColor="@color/colorWhite" />
 
 </RelativeLayout>

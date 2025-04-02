@@ -1,20 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!-- 移除所有菜单项，使用摄像头默认分辨率 -->
     <item
-        android:id="@+id/menu_takepic"
-        android:title="takingPhotos(拍照)"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/menu_recording"
-        android:title="recording(录像)"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/menu_focus"
-        android:title="cameraFocus(对焦)"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/menu_resolution"
-        android:title="resolution(分辨率)"
-        app:showAsAction="never" />
+        android:id="@+id/action_open_folder"
+        android:icon="@android:drawable/ic_menu_more"
+        android:title="文件列表"
+        app:showAsAction="always" />
 </menu>
