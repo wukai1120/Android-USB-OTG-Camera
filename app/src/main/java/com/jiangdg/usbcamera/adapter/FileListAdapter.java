@@ -16,17 +16,25 @@ import androidx.core.content.FileProvider;
 import com.jiangdg.usbcamera.R;
 
 import java.io.File;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class FileListAdapter extends BaseAdapter {
     private Context mContext;
     private List<File> mFileList;
     private LayoutInflater mInflater;
+    private SimpleDateFormat mDateFormat;
+    private DecimalFormat mDecimalFormat;
 
     public FileListAdapter(Context context, List<File> fileList) {
         this.mContext = context;
         this.mFileList = fileList;
         this.mInflater = LayoutInflater.from(context);
+        this.mDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        this.mDecimalFormat = new DecimalFormat("#0.00");
     }
 
     @Override
@@ -51,6 +59,8 @@ public class FileListAdapter extends BaseAdapter {
             convertView = mInflater.inflate(R.layout.item_file, null);
             holder = new ViewHolder();
             holder.tvFileName = convertView.findViewById(R.id.tv_file_name);
+            holder.tvFileSize = convertView.findViewById(R.id.tv_file_size);
+            holder.tvFileTime = convertView.findViewById(R.id.tv_file_time);
             holder.btnShare = convertView.findViewById(R.id.btn_share);
             convertView.setTag(holder);
         } else {
@@ -59,6 +69,12 @@ public class FileListAdapter extends BaseAdapter {
 
         final File file = mFileList.get(position);
         holder.tvFileName.setText(file.getName());
+        
+        // 设置文件大小
+        holder.tvFileSize.setText(formatFileSize(file.length()));
+        
+        // 设置文件创建时间（实际上是最后修改时间）
+        holder.tvFileTime.setText(mDateFormat.format(new Date(file.lastModified())));
         
         holder.btnShare.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -76,6 +92,23 @@ public class FileListAdapter extends BaseAdapter {
         });
 
         return convertView;
+    }
+
+    /**
+     * 格式化文件大小
+     * @param size 文件大小（字节）
+     * @return 格式化后的文件大小字符串
+     */
+    private String formatFileSize(long size) {
+        if (size < 1024) {
+            return size + " B";
+        } else if (size < 1024 * 1024) {
+            return mDecimalFormat.format(size / 1024.0) + " KB";
+        } else if (size < 1024 * 1024 * 1024) {
+            return mDecimalFormat.format(size / (1024.0 * 1024.0)) + " MB";
+        } else {
+            return mDecimalFormat.format(size / (1024.0 * 1024.0 * 1024.0)) + " GB";
+        }
     }
 
     private void shareFile(File file) {
@@ -113,6 +146,8 @@ public class FileListAdapter extends BaseAdapter {
 
     private class ViewHolder {
         TextView tvFileName;
+        TextView tvFileSize;
+        TextView tvFileTime;
         ImageButton btnShare;
     }
 } 

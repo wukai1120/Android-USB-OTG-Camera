@@ -8,11 +8,24 @@ android {
         targetSdkVersion rootProject.ext.versionTarget
         versionCode rootProject.ext.versionCode
         versionName rootProject.ext.versionNameString
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
+    
+    // 添加签名配置
+    signingConfigs {
+        release {
+            // 创建新的签名文件或使用已有的正确签名文件路径
+            // 下面使用debug签名用于测试，实际发布时应替换为正式签名
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+    
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

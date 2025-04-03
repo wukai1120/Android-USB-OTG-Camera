@@ -31,13 +31,17 @@ public class Mp4MediaMuxer {
 
     // 文件路径；文件时长
     public Mp4MediaMuxer(String path, long durationMillis,boolean isVoiceClose) {
-        String mFilePath;
         this.isVoiceClose = isVoiceClose;
         this.durationMillis = durationMillis;
         if(durationMillis != 0) {
             mFilePath = path + "-" + index++ + ".mp4";
         }else{
-            mFilePath = path+".mp4";
+            // 检查路径是否已经包含.mp4后缀，只有不包含时才添加
+            if (path.toLowerCase().endsWith(".mp4")) {
+                mFilePath = path;
+            } else {
+                mFilePath = path + ".mp4";
+            }
         }
         Object mux = null;
         try {

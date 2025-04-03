@@ -18,6 +18,7 @@ import android.view.Surface;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 import com.jiangdg.usbcamera.R;
 import androidx.annotation.NonNull;
@@ -76,6 +77,8 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
     public EditText mEtFileName;
     @BindView(R.id.btn_record)
     public Button mBtnRecord;
+    @BindView(R.id.tv_record_time)
+    public TextView mTvRecordTime;
 
     private UVCCameraHelper mCameraHelper;
     private CameraViewInterface mUVCCameraView;
@@ -84,6 +87,30 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
     private boolean isPreview;
     private boolean isRecording = false;
     private List<String> mMissPermissions = new ArrayList<>();
+    
+    // 录制时间相关变量
+    private Handler mTimerHandler = new Handler();
+    private long mRecordingStartTime = 0;
+    private int mRecordSeconds = 0;
+    private Runnable mTimerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRecording) {
+                mRecordSeconds++;
+                
+                // 计算时、分、秒
+                int hours = mRecordSeconds / 3600;
+                int minutes = (mRecordSeconds % 3600) / 60;
+                int seconds = mRecordSeconds % 60;
+                
+                // 更新UI显示
+                mTvRecordTime.setText(String.format("已录制时长: %02d:%02d:%02d", hours, minutes, seconds));
+                
+                // 每秒更新一次
+                mTimerHandler.postDelayed(this, 1000);
+            }
+        }
+    };
 
     private UVCCameraHelper.OnMyDevConnectListener listener = new UVCCameraHelper.OnMyDevConnectListener() {
 
@@ -127,9 +154,8 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                         }
                         Looper.prepare();
                         if(mCameraHelper != null && mCameraHelper.isCameraOpened()) {
-                            // 使用默认亮度和对比度值
-                            mCameraHelper.resetModelValue(UVCCameraHelper.MODE_BRIGHTNESS);
-                            mCameraHelper.resetModelValue(UVCCameraHelper.MODE_CONTRAST);
+                            // 不设置亮度和对比度，保持摄像头默认状态
+                            Log.d(TAG, "相机已连接，保持默认亮度和对比度设置");
                             
                             // 相机已经打开，更新UI
                             runOnUiThread(new Runnable() {
@@ -148,6 +174,8 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         @Override
         public void onDisConnectDev(UsbDevice device) {
             showShortMsg("disconnecting");
+            // 切换预览状态为关闭
+            isPreview = false;
             // 相机断开，禁用录制按钮
             runOnUiThread(new Runnable() {
                 @Override
@@ -227,6 +255,9 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         mCameraHelper = UVCCameraHelper.getInstance();
         mCameraHelper.setDefaultFrameFormat(UVCCameraHelper.FRAME_FORMAT_MJPEG);
         mCameraHelper.initUSBMonitor(this, mUVCCameraView, listener);
+        
+        // 记录初始化日志，不设置亮度和对比度
+        Log.d(TAG, "Camera initialized, keeping default camera settings");
     }
 
     private void initView() {
@@ -235,7 +266,7 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         // 初始设置录制按钮为禁用状态并添加提示
         mBtnRecord.setEnabled(false);
         mBtnRecord.setAlpha(0.5f);
-        showShortMsg("请先输入文件名才能开始录制");
+        showShortMsg("请先输入文件名点击开始录制");
         
         // 添加文本变化监听器
         mEtFileName.addTextChangedListener(new TextWatcher() {
@@ -285,23 +316,23 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                     
                     String videoPath = usbCameraDir.getAbsolutePath() + "/" + fileName + UVCCameraHelper.SUFFIX_MP4;
                     
-                    // 要先创建文件以供录制
-                    FileUtils.createfile(videoPath);
+                    // 移除直接创建文件的部分，让MediaMuxer来处理文件创建
+                    // FileUtils.createfile(videoPath);
                     
                     // 开始录制
                     RecordParams params = new RecordParams();
                     params.setRecordPath(videoPath);
                     params.setRecordDuration(0);
                     params.setVoiceClose(true);
-                    params.setSupportOverlay(true);
+                    params.setSupportOverlay(false);
                     
                     mCameraHelper.startPusher(params, new AbstractUVCCameraHandler.OnEncodeResultListener() {
                         @Override
                         public void onEncodeResult(byte[] data, int offset, int length, long timestamp, int type) {
-                            // type = 1, h264 video stream
-                            if (type == 1) {
-                                FileUtils.putFileStream(data, offset, length);
-                            }
+                            // 移除直接写入文件的操作，由MediaMuxer处理
+                            // if (type == 1) {
+                            //     FileUtils.putFileStream(data, offset, length);
+                            // }
                         }
 
                         @Override
@@ -316,15 +347,39 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                     
                     isRecording = true;
                     mBtnRecord.setText("结束录制");
+                    // 设置录制按钮为红色
+                    mBtnRecord.setBackgroundColor(getResources().getColor(android.R.color.holo_red_light));
+                    // 禁用文件名输入框
+                    mEtFileName.setEnabled(false);
+                    
+                    // 显示录制时间
+                    mTvRecordTime.setVisibility(View.VISIBLE);
+                    // 重置计时器
+                    mRecordSeconds = 0;
+                    mTvRecordTime.setText("已录制时长: 00:00:00");
+                    // 启动计时器
+                    mTimerHandler.removeCallbacks(mTimerRunnable);
+                    mTimerHandler.post(mTimerRunnable);
+                    
                     showShortMsg("开始录制...");
                 } else {
                     // 停止录制
-                    FileUtils.releaseFile();
+                    // FileUtils.releaseFile(); // 移除对FileUtils的调用
                     mCameraHelper.stopPusher();
                     
                     isRecording = false;
                     mBtnRecord.setText("开始录制");
-                    showShortMsg("录制结束");
+                    // 恢复按钮默认颜色
+                    mBtnRecord.setBackgroundResource(android.R.drawable.btn_default);
+                    // 重新启用文件名输入框
+                    mEtFileName.setEnabled(true);
+                    
+                    // 停止计时器
+                    mTimerHandler.removeCallbacks(mTimerRunnable);
+                    // 隐藏录制时间
+                    mTvRecordTime.setVisibility(View.GONE);
+                    
+                    showShortMsg("录制完成，点击右上角查看文件");
                 }
             }
         });
@@ -367,10 +422,15 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        FileUtils.releaseFile();
+        // FileUtils.releaseFile(); // 移除对FileUtils的调用
         // step.4 release uvc camera resources
         if (mCameraHelper != null) {
             mCameraHelper.release();
+        }
+        
+        // 清理计时器资源
+        if (mTimerHandler != null) {
+            mTimerHandler.removeCallbacks(mTimerRunnable);
         }
     }
 
@@ -399,6 +459,17 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         if (!isPreview && mCameraHelper.isCameraOpened()) {
             mCameraHelper.startPreview(mUVCCameraView);
             isPreview = true;
+            
+            // 预览开始后，立即设置固定亮度值，防止预览变暗
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (mCameraHelper != null && mCameraHelper.isCameraOpened()) {
+                        mCameraHelper.setModelValue(UVCCameraHelper.MODE_BRIGHTNESS, 75);
+                        Log.d(TAG, "Surface创建后设置亮度值: 75");
+                    }
+                }
+            }, 500); // 延迟500毫秒，确保预览已经正常启动
         }
     }
 
@@ -526,9 +597,24 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         if (!cameraReady) {
             showShortMsg("请先连接相机，并输入文件名");
         } else if (!hasText) {
-            showShortMsg("请输入文件名后才能开始录制");
+            showShortMsg("请输入文件名后点击开始录制");
         } else {
             showShortMsg("现在可以开始录制了");
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 在活动恢复时，如果摄像头已经打开并且在预览中，再次设置亮度
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (mCameraHelper != null && mCameraHelper.isCameraOpened() && isPreview) {
+                    mCameraHelper.setModelValue(UVCCameraHelper.MODE_BRIGHTNESS, 75);
+                    Log.d(TAG, "Activity恢复后设置亮度值: 75");
+                }
+            }
+        }, 500);
     }
 }

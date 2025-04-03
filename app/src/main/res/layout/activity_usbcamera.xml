@@ -41,7 +41,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="请输入文件名后才能开始录制"
+            android:text="请输入文件名后点击开始录制"
             android:textColor="#FFFF00"
             android:textSize="14sp"
             android:gravity="center"
@@ -74,6 +74,18 @@
                 android:background="@color/colorPrimary"
                 android:alpha="0.5"/>
         </LinearLayout>
+        
+        <TextView
+            android:id="@+id/tv_record_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="已录制时长: 00:00:00"
+            android:textColor="#FF4500"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:visibility="gone"/>
     </LinearLayout>
 
 </RelativeLayout>

@@ -21,6 +21,9 @@ public class MyApplication extends Application {
     public static final String DIRECTORY_NAME = "USBCamera";
     // 视频保存目录名称
     public static final String VIDEO_DIRECTORY_NAME = "usbcamera";
+    
+    // 默认亮度值（50%，保持画面充分可见）
+    public static final int DEFAULT_BRIGHTNESS = 50;
 
     @Override
     public void onCreate() {

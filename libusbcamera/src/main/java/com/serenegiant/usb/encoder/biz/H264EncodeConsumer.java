@@ -284,7 +284,7 @@ public class H264EncodeConsumer extends Thread {
     }
 
     private static final int FRAME_RATE = 15;
-    private static final float BPP = 0.50f;
+    private static final float BPP = 0.2f;
 
     private int calcBitRate() {
         final int bitrate = (int) (BPP * FRAME_RATE * mWidth * mHeight);

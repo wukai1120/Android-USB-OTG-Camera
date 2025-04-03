@@ -40,7 +40,7 @@ public class MediaSurfaceEncoder extends MediaEncoder implements IVideoEncoder {
 	// parameters for recording
 	private final int mWidth, mHeight;
     private static final int FRAME_RATE = 15;
-    private static final float BPP = 0.50f;
+    private static final float BPP = 0.2f;
 
     private Surface mSurface;
 
