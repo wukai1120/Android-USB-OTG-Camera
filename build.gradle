@@ -37,8 +37,8 @@ ext {
     // if hope supporting 4.4
     // please modify it to 16
     minSdkVersion = 21
-    versionCode = 100
-    versionNameString = '1.7'
+    versionCode = 191
+    versionNameString = '1.9.1'
     javaSourceCompatibility = JavaVersion.VERSION_1_8
     javaTargetCompatibility = JavaVersion.VERSION_1_8
 }

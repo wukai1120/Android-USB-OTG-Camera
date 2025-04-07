@@ -56,6 +56,9 @@ import android.widget.ListView;
 import android.widget.TextView;
 import java.io.FilenameFilter;
 import com.jiangdg.usbcamera.adapter.FileListAdapter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 /**
  * UVCCamera use demo
@@ -74,8 +77,6 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
     public View mTextureView;
     @BindView(R.id.toolbar)
     public Toolbar mToolbar;
-    @BindView(R.id.et_file_name)
-    public EditText mEtFileName;
     @BindView(R.id.btn_record)
     public Button mBtnRecord;
     @BindView(R.id.tv_record_time)
@@ -88,6 +89,9 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
     private boolean isPreview;
     private boolean isRecording = false;
     private List<String> mMissPermissions = new ArrayList<>();
+    
+    // 日期格式化
+    private SimpleDateFormat mDateFormat = new SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault());
     
     // 录制时间相关变量
     private Handler mTimerHandler = new Handler();
@@ -148,7 +152,6 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                                 isRecording = false;
                                 mBtnRecord.setText("开始录制");
                                 mBtnRecord.setBackgroundResource(android.R.drawable.btn_default);
-                                mEtFileName.setEnabled(true);
                                 
                                 // 停止计时器
                                 mTimerHandler.removeCallbacks(mTimerRunnable);
@@ -350,29 +353,10 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
             ((AspectRatioTextureView) mUVCCameraView).setAspectRatio(4, 3); // 设置4:3的宽高比
         }
         
-        // 初始设置录制按钮为禁用状态并添加提示
+        // 初始设置录制按钮为禁用状态
         mBtnRecord.setEnabled(false);
         mBtnRecord.setAlpha(0.5f);
-        showShortMsg("请先输入文件名点击开始录制");
-        
-        // 添加文本变化监听器
-        mEtFileName.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                // 不需要实现
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                // 当文本变化时，更新按钮状态
-                updateRecordButtonState();
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                // 不需要实现
-            }
-        });
+        showShortMsg("请先连接相机");
         
         // 初始化录制按钮
         mBtnRecord.setOnClickListener(new View.OnClickListener() {
@@ -384,11 +368,8 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                 }
                 
                 if (!isRecording) {
-                    String fileName = mEtFileName.getText().toString().trim();
-                    if (TextUtils.isEmpty(fileName)) {
-                        showShortMsg("请输入文件名");
-                        return;
-                    }
+                    // 使用当前时间作为文件名
+                    String fileName = mDateFormat.format(new Date());
                     
                     // 获取视频保存目录
                     File usbCameraDir = getVideoSaveDirectory();
@@ -470,8 +451,6 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                         mBtnRecord.setText("结束录制");
                         // 设置录制按钮为红色
                         mBtnRecord.setBackgroundColor(getResources().getColor(android.R.color.holo_red_light));
-                        // 禁用文件名输入框
-                        mEtFileName.setEnabled(false);
                         
                         // 显示录制时间
                         mTvRecordTime.setVisibility(View.VISIBLE);
@@ -498,8 +477,6 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                         mBtnRecord.setText("开始录制");
                         // 恢复按钮默认颜色
                         mBtnRecord.setBackgroundResource(android.R.drawable.btn_default);
-                        // 重新启用文件名输入框
-                        mEtFileName.setEnabled(true);
                         
                         // 停止计时器
                         mTimerHandler.removeCallbacks(mTimerRunnable);
@@ -782,19 +759,16 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
      * 更新录制按钮状态
      */
     private void updateRecordButtonState() {
-        boolean hasText = !TextUtils.isEmpty(mEtFileName.getText().toString().trim());
         boolean cameraReady = mCameraHelper != null && mCameraHelper.isCameraOpened();
         
-        // 只有当相机已连接且有文件名时按钮才可用
-        boolean enabled = hasText && cameraReady;
+        // 只有当相机已连接时按钮才可用
+        boolean enabled = cameraReady;
         
         mBtnRecord.setEnabled(enabled);
         mBtnRecord.setAlpha(enabled ? 1.0f : 0.5f);
         
         if (!cameraReady) {
-            showShortMsg("请先连接相机，并输入文件名");
-        } else if (!hasText) {
-            showShortMsg("请输入文件名后点击开始录制");
+            showShortMsg("请先连接相机");
         } else {
             showShortMsg("现在可以开始录制了");
         }

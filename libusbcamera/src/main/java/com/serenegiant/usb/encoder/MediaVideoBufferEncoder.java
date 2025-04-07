@@ -40,7 +40,7 @@ public class MediaVideoBufferEncoder extends MediaEncoder implements IVideoEncod
 
 	private static final String MIME_TYPE = "video/avc";
     private static final int FRAME_RATE = 15;
-    private static final float BPP = 0.2f;
+    private static final float BPP = 0.5f;
 
 	private final int mWidth, mHeight;
     protected int mColorFormat;
