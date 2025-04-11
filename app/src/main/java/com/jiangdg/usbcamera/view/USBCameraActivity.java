@@ -194,6 +194,10 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
                 Log.d(TAG, "相机连接成功: " + (device != null ? device.getDeviceName() : "未知设备") + 
                       ", VID: " + (device != null ? device.getVendorId() : "未知") + 
                       ", PID: " + (device != null ? device.getProductId() : "未知"));
+                
+                // 更新分辨率为1920x1080
+                updateResolution(1920, 1080);
+                
                 // need to wait UVCCamera initialize over
                 new Thread(new Runnable() {
                     @Override
@@ -329,7 +333,7 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         mCameraHelper = UVCCameraHelper.getInstance();
 
         // 尝试设置更加普遍兼容的格式和分辨率
-        mCameraHelper.setDefaultPreviewSize(640, 480); // 设置默认预览分辨率
+        mCameraHelper.setDefaultPreviewSize(1920, 1080); // 设置默认预览分辨率为1920x1080
         mCameraHelper.setDefaultFrameFormat(UVCCameraHelper.FRAME_FORMAT_MJPEG); // 使用MJPEG格式
         
         // 初始化USB监视器
@@ -341,7 +345,7 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
         }
         
         // 记录初始化日志
-        Log.d(TAG, "相机初始化完成，预览分辨率: 640x480, 格式: MJPEG");
+        Log.d(TAG, "相机初始化完成，预览分辨率: 1920x1080, 格式: MJPEG");
     }
 
     private void initView() {
@@ -845,5 +849,35 @@ public class USBCameraActivity extends AppCompatActivity implements CameraDialog
           .append(getResources().getDisplayMetrics().heightPixels);
         
         Log.d(TAG, sb.toString());
+    }
+
+    /**
+     * 更新视频分辨率
+     * @param width 宽度
+     * @param height 高度
+     */
+    private void updateResolution(final int width, final int height) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (mCameraHelper != null) {
+                    try {
+                        mCameraHelper.updateResolution(width, height);
+                        Log.d(TAG, "视频分辨率已更新为: " + width + "x" + height);
+                        
+                        // 更新预览的宽高比
+                        if (mUVCCameraView instanceof AspectRatioTextureView) {
+                            ((AspectRatioTextureView) mUVCCameraView).setAspectRatio(width, height);
+                            Log.d(TAG, "更新预览宽高比为: " + width + ":" + height);
+                        }
+                        
+                        showShortMsg("视频分辨率已设置为: " + width + "x" + height);
+                    } catch (Exception e) {
+                        Log.e(TAG, "更新分辨率失败: " + e.getMessage(), e);
+                        showShortMsg("设置分辨率失败");
+                    }
+                }
+            }
+        });
     }
 }
